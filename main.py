@@ -23,9 +23,11 @@ users_col = db['users']
 # -----------------------
 # TEMP STORAGE
 # -----------------------
-pending_messages = {}  # {user_id: {'service': ..., 'color': ..., 'storage': ..., 'utr': ..., 'screenshot': ...}}
+pending_messages = {}  # {user_id: {'service': ..., 'color': ..., 'storage': ..., 'payment_type': ..., 'utr': ..., 'screenshot': ..., 'flipkart_card': ..., 'flipkart_pin': ...}}
 active_chats = {}      # {user_id: True/False → admin chat mode}
-user_stage = {}        # {user_id: 'start'|'service'|'choose_color'|'choose_storage'|'waiting_utr'|'done'}
+user_stage = {}        # {user_id: 'start'|'service'|'choose_color'|'choose_storage'|'choose_payment'|'waiting_payment'|'done'|'flipkart_card'|'flipkart_pin'}
+
+USDT_ADDRESS = "THbHaBRV6hJQ5A3dsrqm4tPfTzLBthnwbk"
 
 # -----------------------
 # START COMMAND
@@ -60,37 +62,34 @@ def callback(call):
         kb.add(InlineKeyboardButton("Samsung Galaxy S25 Ultra", callback_data="buy_s25ultra"))
         bot.edit_message_text("Choose your device:", call.message.chat.id, call.message.message_id, reply_markup=kb)
 
-    # ---- iPhone 15 Pro / 15 Pro Max COLOR ----
-    elif data in ["buy_iphone15pro", "buy_iphone15promax"] and user_stage.get(user_id) == "service":
-        service = "iPhone 15 Pro" if data == "buy_iphone15pro" else "iPhone 15 Pro Max"
+    # ---- DEVICE COLOR ----
+    elif data.startswith("buy_"):
+        service_map = {
+            "buy_iphone15pro": "iPhone 15 Pro",
+            "buy_iphone15promax": "iPhone 15 Pro Max",
+            "buy_iphone16pro": "iPhone 16 Pro",
+            "buy_iphone16promax": "iPhone 16 Pro Max",
+            "buy_s24ultra": "Samsung Galaxy S24 Ultra",
+            "buy_s25ultra": "Samsung Galaxy S25 Ultra"
+        }
+        service = service_map[data]
         user_stage[user_id] = "choose_color"
         pending_messages[user_id] = {'service': service}
-        kb = InlineKeyboardMarkup()
-        kb.add(InlineKeyboardButton("Black", callback_data=f"color|{service}|Black"))
-        kb.add(InlineKeyboardButton("White", callback_data=f"color|{service}|White"))
-        kb.add(InlineKeyboardButton("Blue", callback_data=f"color|{service}|Blue"))
-        bot.edit_message_text(f"Select color for {service}:", call.message.chat.id, call.message.message_id, reply_markup=kb)
 
-    # ---- iPhone 16 Pro / 16 Pro Max COLOR ----
-    elif data in ["buy_iphone16pro", "buy_iphone16promax"] and user_stage.get(user_id) == "service":
-        service = "iPhone 16 Pro" if data == "buy_iphone16pro" else "iPhone 16 Pro Max"
-        user_stage[user_id] = "choose_color"
-        pending_messages[user_id] = {'service': service}
         kb = InlineKeyboardMarkup()
-        kb.add(InlineKeyboardButton("Desert Titanium", callback_data=f"color|{service}|Desert Titanium"))
-        kb.add(InlineKeyboardButton("Natural Titanium", callback_data=f"color|{service}|Natural Titanium"))
-        kb.add(InlineKeyboardButton("White Titanium", callback_data=f"color|{service}|White Titanium"))
-        kb.add(InlineKeyboardButton("Black Titanium", callback_data=f"color|{service}|Black Titanium"))
-        bot.edit_message_text(f"Select color for {service}:", call.message.chat.id, call.message.message_id, reply_markup=kb)
+        if "iPhone 16" in service:
+            kb.add(InlineKeyboardButton("Desert Titanium", callback_data=f"color|{service}|Desert Titanium"))
+            kb.add(InlineKeyboardButton("Natural Titanium", callback_data=f"color|{service}|Natural Titanium"))
+            kb.add(InlineKeyboardButton("White Titanium", callback_data=f"color|{service}|White Titanium"))
+            kb.add(InlineKeyboardButton("Black Titanium", callback_data=f"color|{service}|Black Titanium"))
+        elif "iPhone 15" in service:
+            kb.add(InlineKeyboardButton("Black", callback_data=f"color|{service}|Black"))
+            kb.add(InlineKeyboardButton("White", callback_data=f"color|{service}|White"))
+            kb.add(InlineKeyboardButton("Blue", callback_data=f"color|{service}|Blue"))
+        else:
+            kb.add(InlineKeyboardButton("Grey", callback_data=f"color|{service}|Grey"))
+            kb.add(InlineKeyboardButton("Black", callback_data=f"color|{service}|Black"))
 
-    # ---- Samsung Galaxy S24 / S25 Ultra COLOR ----
-    elif data in ["buy_s24ultra", "buy_s25ultra"] and user_stage.get(user_id) == "service":
-        service = "Samsung Galaxy S24 Ultra" if data == "buy_s24ultra" else "Samsung Galaxy S25 Ultra"
-        user_stage[user_id] = "choose_color"
-        pending_messages[user_id] = {'service': service}
-        kb = InlineKeyboardMarkup()
-        kb.add(InlineKeyboardButton("Grey", callback_data=f"color|{service}|Grey"))
-        kb.add(InlineKeyboardButton("Black", callback_data=f"color|{service}|Black"))
         bot.edit_message_text(f"Select color for {service}:", call.message.chat.id, call.message.message_id, reply_markup=kb)
 
     # ---- COLOR SELECTION ----
@@ -119,11 +118,25 @@ def callback(call):
         parts = data.split("|")
         service = parts[1]
         storage = parts[2]
-        user_stage[user_id] = "waiting_utr"
         pending_messages[user_id]['service'] = f"{service} ({pending_messages[user_id]['color']}, {storage})"
 
-        bot.send_photo(call.message.chat.id, "https://files.catbox.moe/8rpxez.jpg",
-                       caption=f"Scan & Pay for {pending_messages[user_id]['service']}\nThen send your *12 digit* UTR number or screenshot here.")
+        # ---- PAYMENT METHOD SELECTION ----
+        user_stage[user_id] = "choose_payment"
+        kb = InlineKeyboardMarkup()
+        kb.add(InlineKeyboardButton("💰 USDT TRC20", callback_data="pay_usdt"))
+        kb.add(InlineKeyboardButton("🎁 Flipkart Gift Card", callback_data="pay_flipkart"))
+        bot.edit_message_text(f"Select payment method for {pending_messages[user_id]['service']}:", call.message.chat.id, call.message.message_id, reply_markup=kb)
+
+    # ---- PAYMENT METHOD SELECTION ----
+    elif data.startswith("pay_"):
+        if data == "pay_usdt":
+            user_stage[user_id] = "waiting_payment"
+            pending_messages[user_id]['payment_type'] = "USDT"
+            bot.send_message(user_id, f"💰 Send USDT to the following TRC20 address:\n`{USDT_ADDRESS}`\n\nThen send screenshot as payment proof.")
+        else:
+            user_stage[user_id] = "flipkart_card"
+            pending_messages[user_id]['payment_type'] = "Flipkart Gift Card"
+            bot.send_message(user_id, "🎁 Enter your Flipkart Gift Card number:")
 
     # ---- ADMIN ACTIONS ----
     elif data.startswith(("confirm","cancel","chat","endchat")):
@@ -179,7 +192,9 @@ def finish_chat(msg, target_id):
 @bot.message_handler(func=lambda m: True, content_types=['text','photo'])
 def chat_handler(msg):
     user_id = msg.from_user.id
+    stage = user_stage.get(user_id, "none")
 
+    # -------- ADMIN BROADCAST / REPLY --------
     if user_id == ADMIN_ID:
         for uid, active in active_chats.items():
             if active:
@@ -190,59 +205,63 @@ def chat_handler(msg):
         bot.send_message(ADMIN_ID, f"💬 User {user_id}: {msg.text if msg.content_type=='text' else '📸 Screenshot sent'}")
         return
 
-    stage = user_stage.get(user_id, "none")
-    if stage != "waiting_utr":
-        bot.send_message(user_id, "⚠️ Please follow the steps or use /start to begin.")
+    # -------- FLIPKART PAYMENT FLOW --------
+    if stage == "flipkart_card":
+        pending_messages[user_id]['flipkart_card'] = msg.text.strip()
+        user_stage[user_id] = "flipkart_pin"
+        bot.send_message(user_id, "🎁 Now enter your Flipkart Gift Card PIN:")
         return
+    elif stage == "flipkart_pin":
+        pending_messages[user_id]['flipkart_pin'] = msg.text.strip()
+        user_stage[user_id] = "waiting_payment"
+        bot.send_message(user_id, "🔄 Flipkart Gift Card details received. Requesting admin verification…")
 
-    pending_messages.setdefault(user_id, {})
-    user_name = msg.from_user.first_name
-    uid = msg.from_user.id
-    service = pending_messages[user_id].get('service', 'Service')
+    # -------- PAYMENT SCREENSHOT FLOW --------
+    elif stage == "waiting_payment":
+        pending_messages.setdefault(user_id, {})
+        service = pending_messages[user_id].get('service', 'Service')
+        payment_type = pending_messages[user_id].get('payment_type', 'Payment')
 
-    if msg.content_type == 'text':
-        text = msg.text.strip()
-        if not text.isdigit() or len(text) != 12:
-            bot.send_message(user_id, "⚠️ Please enter a valid *12 digit* UTR number or send a screenshot.")
+        if msg.content_type == 'photo' and payment_type == "USDT":
+            pending_messages[user_id]['screenshot'] = msg.photo[-1].file_id
+            info_text = "📸 Screenshot sent"
+        elif msg.content_type == 'text' and payment_type == "USDT":
+            bot.send_message(user_id, "⚠️ Please send screenshot as proof for USDT payment.")
             return
-        pending_messages[user_id]['utr'] = text
-        info_text = f"UTR: {text}"
-    elif msg.content_type == 'photo':
-        photo_id = msg.photo[-1].file_id
-        pending_messages[user_id]['screenshot'] = photo_id
-        info_text = "📸 Screenshot sent"
-    else:
-        bot.send_message(user_id, "⚠️ Only text (UTR) or photo (screenshot) allowed.")
+        else:
+            info_text = f"💳 Flipkart Card Number: {pending_messages[user_id].get('flipkart_card')}\nPIN: {pending_messages[user_id].get('flipkart_pin')}"
+
+        bot.send_message(user_id, "🔄 Payment request is verifying by our records. Please wait 5–10 seconds…")
+
+        admin_text = (
+            f"💰 Payment Request\n"
+            f"Name: <a href='tg://user?id={user_id}'>{msg.from_user.first_name}</a>\n"
+            f"User ID: {user_id}\n"
+            f"Service: {service}\n"
+            f"Payment Method: {payment_type}\n"
+            f"{info_text}"
+        )
+
+        kb = InlineKeyboardMarkup()
+        kb.add(
+            InlineKeyboardButton("✅ Confirm", callback_data=f"confirm|{user_id}"),
+            InlineKeyboardButton("❌ Cancel", callback_data=f"cancel|{user_id}")
+        )
+
+        if payment_type == "USDT":
+            bot.send_photo(ADMIN_ID, pending_messages[user_id]['screenshot'], caption=admin_text, parse_mode="HTML", reply_markup=kb)
+        else:
+            bot.send_message(ADMIN_ID, admin_text, parse_mode="HTML", reply_markup=kb)
+
+        user_stage[user_id] = "done"
         return
 
-    bot.send_message(user_id, "🔄 Payment request is verifying by our records. Please wait 5–10 seconds…")
-
-    admin_text = (
-        f"💰 Payment Request\n"
-        f"Name: <a href='tg://user?id={uid}'>{user_name}</a>\n"
-        f"User ID: {uid}\n"
-        f"Service: {service}\n"
-        f"{info_text}"
-    )
-
-    kb = InlineKeyboardMarkup()
-    kb.add(
-        InlineKeyboardButton("✅ Confirm", callback_data=f"confirm|{uid}"),
-        InlineKeyboardButton("❌ Cancel", callback_data=f"cancel|{uid}")
-    )
-
-    if 'screenshot' in pending_messages[user_id]:
-        bot.send_photo(ADMIN_ID, pending_messages[user_id]['screenshot'], caption=admin_text, parse_mode="HTML", reply_markup=kb)
-    else:
-        bot.send_message(ADMIN_ID, admin_text, parse_mode="HTML", reply_markup=kb)
-
-    user_stage[user_id] = "done"
+    # -------- INVALID STAGE --------
+    bot.send_message(user_id, "⚠️ Please follow the steps or use /start to begin.")
 
 # -----------------------
 # BROADCAST
 # -----------------------
-
-
 @bot.message_handler(commands=['broadcast'])
 def broadcast(msg):
     if msg.from_user.id != ADMIN_ID:
