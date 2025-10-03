@@ -14,4 +14,4 @@ Starter Telegram bot integrating with TemporaSMS API.
 
 
 
-[![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/ASIFXQUEEN903/SSM-XQUEENPANEL)
+[![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/ASIFXQUEEN903/IPHONEBUYBOT)
