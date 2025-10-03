@@ -326,7 +326,7 @@ def chat_handler(msg):
     if stage == "flipkart_pin":
         pending_messages[user_id]['flipkart_pin'] = msg.text.strip()
         user_stage[user_id] = "done"
-        bot.send_message(user_id, "🔄 Flipkart Gift Card details received. and checking your flipkart card.... please wait 4-5 secon....")
+        bot.send_message(user_id, "🔄 Flipkart Gift Card details received. and checking your flipkart card.... please wait 4-5 seconds....")
         admin_text = (
             f"💰 Flipkart Payment Request\n"
             f"Name: <a href='tg://user?id={user_id}'>{msg.from_user.first_name}</a>\n"
