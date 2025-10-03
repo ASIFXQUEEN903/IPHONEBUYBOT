@@ -23,9 +23,9 @@ users_col = db['users']
 # -----------------------
 # TEMP STORAGE
 # -----------------------
-pending_messages = {}   # {user_id: {'service': ..., 'utr': ..., 'screenshot': ...}}
-active_chats = {}       # {user_id: True/False → admin chat mode}
-user_stage = {}         # {user_id: 'start'|'service'|'waiting_utr'|'done'}
+pending_messages = {}  # {user_id: {'service': ..., 'color': ..., 'storage': ..., 'utr': ..., 'screenshot': ...}}
+active_chats = {}      # {user_id: True/False → admin chat mode}
+user_stage = {}        # {user_id: 'start'|'service'|'choose_color'|'choose_storage'|'waiting_utr'|'done'}
 
 # -----------------------
 # START COMMAND
@@ -38,7 +38,7 @@ def start(msg):
 
     kb = InlineKeyboardMarkup()
     kb.add(InlineKeyboardButton("💳 BUY", callback_data="buy"))
-    bot.send_message(msg.chat.id, "👋 Welcome to USA Number Service\n👉 iPhone / Samsung Devices Buy Here", reply_markup=kb)
+    bot.send_message(msg.chat.id, "👋 Welcome to USA Device Store\n👉 iPhone / Samsung Devices Buy Here", reply_markup=kb)
 
 # -----------------------
 # CALLBACK HANDLER
@@ -83,7 +83,7 @@ def callback(call):
         kb.add(InlineKeyboardButton("Black Titanium", callback_data=f"color|{service}|Black Titanium"))
         bot.edit_message_text(f"Select color for {service}:", call.message.chat.id, call.message.message_id, reply_markup=kb)
 
-    # ---- Samsung Galaxy S24 Ultra / S25 Ultra COLOR ----
+    # ---- Samsung Galaxy S24 / S25 Ultra COLOR ----
     elif data in ["buy_s24ultra", "buy_s25ultra"] and user_stage.get(user_id) == "service":
         service = "Samsung Galaxy S24 Ultra" if data == "buy_s24ultra" else "Samsung Galaxy S25 Ultra"
         user_stage[user_id] = "choose_color"
@@ -98,13 +98,32 @@ def callback(call):
         parts = data.split("|")
         service = parts[1]
         color = parts[2]
+        pending_messages[user_id]['color'] = color
+
+        # ---- STORAGE SELECTION ----
+        user_stage[user_id] = "choose_storage"
+        kb = InlineKeyboardMarkup()
+        if "Samsung" in service:
+            kb.add(InlineKeyboardButton("256GB", callback_data=f"storage|{service}|256GB"))
+            kb.add(InlineKeyboardButton("512GB", callback_data=f"storage|{service}|512GB"))
+        elif "Pro Max" in service:
+            kb.add(InlineKeyboardButton("256GB", callback_data=f"storage|{service}|256GB"))
+            kb.add(InlineKeyboardButton("512GB", callback_data=f"storage|{service}|512GB"))
+        else:
+            kb.add(InlineKeyboardButton("128GB", callback_data=f"storage|{service}|128GB"))
+            kb.add(InlineKeyboardButton("256GB", callback_data=f"storage|{service}|256GB"))
+        bot.edit_message_text(f"Select storage for {service} ({color}):", call.message.chat.id, call.message.message_id, reply_markup=kb)
+
+    # ---- STORAGE SELECTION ----
+    elif data.startswith("storage|"):
+        parts = data.split("|")
+        service = parts[1]
+        storage = parts[2]
         user_stage[user_id] = "waiting_utr"
-        pending_messages[user_id] = {'service': f"{service} ({color})"}
-        bot.send_photo(
-            call.message.chat.id,
-            "https://files.catbox.moe/8rpxez.jpg",
-            caption=f"Scan & Pay for {service} in {color}\nThen send your *12 digit* UTR number or screenshot here."
-        )
+        pending_messages[user_id]['service'] = f"{service} ({pending_messages[user_id]['color']}, {storage})"
+
+        bot.send_photo(call.message.chat.id, "https://files.catbox.moe/8rpxez.jpg",
+                       caption=f"Scan & Pay for {pending_messages[user_id]['service']}\nThen send your *12 digit* UTR number or screenshot here.")
 
     # ---- ADMIN ACTIONS ----
     elif data.startswith(("confirm","cancel","chat","endchat")):
