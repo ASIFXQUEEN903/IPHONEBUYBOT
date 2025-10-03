@@ -52,7 +52,7 @@ def start(msg):
 
     kb = InlineKeyboardMarkup()
     kb.add(InlineKeyboardButton("💳 BUY", callback_data="buy"))
-    bot.send_message(msg.chat.id, "👋 Welcome to USA Device Store\n👉 iPhone / Samsung Devices Buy Here", reply_markup=kb)
+    bot.send_message(msg.chat.id, "👋 Welcome to Carding Store\n👉 iPhone / Samsung Devices Buy Here", reply_markup=kb)
 
 # -----------------------
 # CALLBACK HANDLER
@@ -209,7 +209,7 @@ def callback(call):
         service = info.get('service', 'Service')
 
         if action == "confirm":
-            bot.send_message(target_id, f"✅ Your payment is successful! Generating {service}...")
+            bot.send_message(target_id, f"✅ Your payment is successful! please wait 5- 10 Mintus your order placed {service}...")
             kb = InlineKeyboardMarkup()
             kb.add(InlineKeyboardButton("💬 Chat with User", callback_data=f"chat|{target_id}"))
             bot.send_message(ADMIN_ID, f"Payment confirmed for user {target_id}.", reply_markup=kb)
