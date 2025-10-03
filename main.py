@@ -23,9 +23,9 @@ users_col = db['users']
 # -----------------------
 # TEMP STORAGE
 # -----------------------
-pending_messages = {}  # {user_id: {'service': ..., 'utr': ..., 'screenshot': ...}}
-active_chats = {}      # {user_id: True/False → admin chat mode}
-user_stage = {}        # {user_id: 'start'|'service'|'waiting_utr'|'done'}
+pending_messages = {}
+active_chats = {}
+user_stage = {}
 
 # -----------------------
 # START COMMAND
@@ -53,21 +53,39 @@ def callback(call):
         user_stage[user_id] = "service"
         kb = InlineKeyboardMarkup()
         kb.add(InlineKeyboardButton("📱 iPhone 16 Pro", callback_data="buy_iphone16pro"))
-        kb.add(InlineKeyboardButton("📱 iPhone 15 Pro", callback_data="buy_iphone15pro"))
+        kb.add(InlineKeyboardButton("📱 iPhone 15 Pro", callback_data="choosecolor_iphone15pro"))
         kb.add(InlineKeyboardButton("📱 iPhone 16 Pro Max", callback_data="buy_iphone16promax"))
-        kb.add(InlineKeyboardButton("📱 iPhone 15 Pro Max", callback_data="buy_iphone15promax"))
+        kb.add(InlineKeyboardButton("📱 iPhone 15 Pro Max", callback_data="choosecolor_iphone15promax"))
         kb.add(InlineKeyboardButton("📱 Samsung Galaxy S24 Ultra", callback_data="buy_s24ultra"))
         kb.add(InlineKeyboardButton("📱 Samsung Galaxy S25 Ultra", callback_data="buy_s25ultra"))
         bot.edit_message_text("Choose your product:", call.message.chat.id, call.message.message_id, reply_markup=kb)
 
-    # ---- PRODUCT SELECT ----
+    # ---- CHOOSE COLOUR FOR IPHONE 15 SERIES ----
+    elif data.startswith("choosecolor_") and user_stage.get(user_id) == "service":
+        product = "iPhone 15 Pro" if "iphone15pro" in data and "max" not in data else "iPhone 15 Pro Max"
+        user_stage[user_id] = "choose_color"
+        pending_messages[user_id] = {'service': product}
+        kb = InlineKeyboardMarkup()
+        kb.add(InlineKeyboardButton("⚫ Black", callback_data=f"color_black|{product}"))
+        kb.add(InlineKeyboardButton("⚪ White", callback_data=f"color_white|{product}"))
+        kb.add(InlineKeyboardButton("🔵 Blue", callback_data=f"color_blue|{product}"))
+        bot.edit_message_text(f"Choose a colour for {product}:", call.message.chat.id, call.message.message_id, reply_markup=kb)
+
+    # ---- COLOR SELECT ----
+    elif data.startswith("color_") and user_stage.get(user_id) in ["choose_color", "service"]:
+        parts = data.split("|")
+        color = parts[0].replace("color_", "").capitalize()
+        product = parts[1]
+        user_stage[user_id] = "waiting_utr"
+        pending_messages[user_id] = {'service': f"{product} ({color})"}
+        bot.send_photo(call.message.chat.id, "https://files.catbox.moe/8rpxez.jpg",
+                       caption=f"Scan & Pay for {product} ({color})\nThen send your *12 digit* UTR number or screenshot here.")
+
+    # ---- DIRECT PRODUCTS (no colour needed) ----
     elif data.startswith("buy_") and user_stage.get(user_id) == "service":
-        # Map callback → product name
         products = {
             "buy_iphone16pro": "iPhone 16 Pro",
-            "buy_iphone15pro": "iPhone 15 Pro",
             "buy_iphone16promax": "iPhone 16 Pro Max",
-            "buy_iphone15promax": "iPhone 15 Pro Max",
             "buy_s24ultra": "Samsung Galaxy S24 Ultra",
             "buy_s25ultra": "Samsung Galaxy S25 Ultra",
         }
@@ -83,7 +101,6 @@ def callback(call):
         action = parts[0]
         target_id = int(parts[1])
 
-        # ---- START CHAT ----
         if action == "chat":
             active_chats[target_id] = True
             kb = InlineKeyboardMarkup()
@@ -92,13 +109,11 @@ def callback(call):
             bot.send_message(ADMIN_ID, f"💬 Chat started with user {target_id}", reply_markup=kb)
             return
 
-        # ---- END CHAT ----
         elif action == "endchat":
             bot.send_message(ADMIN_ID, f"💬 Type the final message to send to user {target_id} before ending chat:")
             bot.register_next_step_handler_by_chat_id(ADMIN_ID, lambda m: finish_chat(m, target_id))
             return
 
-        # ---- CONFIRM/CANCEL PAYMENT ----
         if target_id not in pending_messages:
             bot.send_message(ADMIN_ID, "⚠️ No pending request from this user.")
             return
@@ -135,14 +150,12 @@ def finish_chat(msg, target_id):
 def chat_handler(msg):
     user_id = msg.from_user.id
 
-    # ---- ADMIN CHAT ----
     if user_id == ADMIN_ID:
         for uid, active in active_chats.items():
             if active:
                 bot.send_message(uid, f"🤖Bot: {msg.text if msg.content_type=='text' else '📸 Screenshot sent'}")
         return
 
-    # ---- USER CHAT ----
     if user_id in active_chats and active_chats[user_id]:
         bot.send_message(ADMIN_ID, f"💬 User {user_id}: {msg.text if msg.content_type=='text' else '📸 Screenshot sent'}")
         return
@@ -174,7 +187,6 @@ def chat_handler(msg):
 
     bot.send_message(user_id, "🔄 Payment request is verifying by our records. Please wait 5–10 seconds…")
 
-    # ---- SEND ADMIN ----
     admin_text = (
         f"💰 Payment Request\n"
         f"Name: <a href='tg://user?id={uid}'>{user_name}</a>\n"
