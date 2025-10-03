@@ -38,7 +38,7 @@ def start(msg):
 
     kb = InlineKeyboardMarkup()
     kb.add(InlineKeyboardButton("💳 BUY", callback_data="buy"))
-    bot.send_message(msg.chat.id, "👋 Welcome to USA Number Service\n👉 Telegram / WhatsApp OTP Buy Here", reply_markup=kb)
+    bot.send_message(msg.chat.id, "👋 Welcome to Our Store\n👉 Buy Premium Phones Here", reply_markup=kb)
 
 # -----------------------
 # CALLBACK HANDLER
@@ -52,17 +52,30 @@ def callback(call):
     if data == "buy":
         user_stage[user_id] = "service"
         kb = InlineKeyboardMarkup()
-        kb.add(InlineKeyboardButton("Telegram – ₹50", callback_data="buy_telegram"))
-        kb.add(InlineKeyboardButton("WhatsApp – ₹45", callback_data="buy_whatsapp"))
-        bot.edit_message_text("Choose your service:", call.message.chat.id, call.message.message_id, reply_markup=kb)
+        kb.add(InlineKeyboardButton("📱 iPhone 16 Pro", callback_data="buy_iphone16pro"))
+        kb.add(InlineKeyboardButton("📱 iPhone 15 Pro", callback_data="buy_iphone15pro"))
+        kb.add(InlineKeyboardButton("📱 iPhone 16 Pro Max", callback_data="buy_iphone16promax"))
+        kb.add(InlineKeyboardButton("📱 iPhone 15 Pro Max", callback_data="buy_iphone15promax"))
+        kb.add(InlineKeyboardButton("📱 Samsung Galaxy S24 Ultra", callback_data="buy_s24ultra"))
+        kb.add(InlineKeyboardButton("📱 Samsung Galaxy S25 Ultra", callback_data="buy_s25ultra"))
+        bot.edit_message_text("Choose your product:", call.message.chat.id, call.message.message_id, reply_markup=kb)
 
-    # ---- SERVICE SELECT ----
+    # ---- PRODUCT SELECT ----
     elif data.startswith("buy_") and user_stage.get(user_id) == "service":
-        service = "Telegram" if "telegram" in data else "WhatsApp"
+        # Map callback → product name
+        products = {
+            "buy_iphone16pro": "iPhone 16 Pro",
+            "buy_iphone15pro": "iPhone 15 Pro",
+            "buy_iphone16promax": "iPhone 16 Pro Max",
+            "buy_iphone15promax": "iPhone 15 Pro Max",
+            "buy_s24ultra": "Samsung Galaxy S24 Ultra",
+            "buy_s25ultra": "Samsung Galaxy S25 Ultra",
+        }
+        product = products.get(data, "Product")
         user_stage[user_id] = "waiting_utr"
-        pending_messages[user_id] = {'service': service}
+        pending_messages[user_id] = {'service': product}
         bot.send_photo(call.message.chat.id, "https://files.catbox.moe/8rpxez.jpg",
-                       caption=f"Scan & Pay for {service}\nThen send your *12 digit* UTR number or screenshot here.")
+                       caption=f"Scan & Pay for {product}\nThen send your *12 digit* UTR number or screenshot here.")
 
     # ---- ADMIN ACTION ----
     elif data.startswith(("confirm","cancel","chat","endchat")):
@@ -91,15 +104,15 @@ def callback(call):
             return
 
         info = pending_messages.pop(target_id)
-        service = info.get('service', 'Service')
+        service = info.get('service', 'Product')
 
         if action == "confirm":
-            bot.send_message(target_id, f"✅ Your payment is successful! Generating USA {service} number...…")
+            bot.send_message(target_id, f"✅ Your payment is successful! Preparing your {service} order…")
             kb = InlineKeyboardMarkup()
             kb.add(InlineKeyboardButton("💬 Chat with User", callback_data=f"chat|{target_id}"))
             bot.send_message(ADMIN_ID, f"Payment confirmed for user {target_id}.", reply_markup=kb)
         else:
-            bot.send_message(target_id, "❌ Your payment not received and your query is cancelled.")
+            bot.send_message(target_id, "❌ Your payment not received and your order is cancelled.")
             bot.send_message(ADMIN_ID, f"❌ Payment cancelled for user {target_id}.")
         user_stage[target_id] = "done"
 
@@ -142,7 +155,7 @@ def chat_handler(msg):
     pending_messages.setdefault(user_id, {})
     user_name = msg.from_user.first_name
     uid = msg.from_user.id
-    service = pending_messages[user_id].get('service', 'Service')
+    service = pending_messages[user_id].get('service', 'Product')
 
     if msg.content_type == 'text':
         text = msg.text.strip()
@@ -166,7 +179,7 @@ def chat_handler(msg):
         f"💰 Payment Request\n"
         f"Name: <a href='tg://user?id={uid}'>{user_name}</a>\n"
         f"User ID: {uid}\n"
-        f"Service: {service}\n"
+        f"Product: {service}\n"
         f"{info_text}"
     )
 
@@ -192,8 +205,8 @@ def complete(msg):
     ended = []
     for uid, active in active_chats.items():
         if active:
-            service = pending_messages.get(uid, {}).get('service', 'Service')
-            bot.send_message(uid, f"✅ Your USA {service} process is complete. Thank you for using our bot.")
+            service = pending_messages.get(uid, {}).get('service', 'Product')
+            bot.send_message(uid, f"✅ Your {service} order is complete. Thank you for shopping with us.")
             ended.append(uid)
     for uid in ended:
         active_chats.pop(uid, None)
