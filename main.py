@@ -23,9 +23,9 @@ users_col = db['users']
 # -----------------------
 # TEMP STORAGE
 # -----------------------
-pending_messages = {}  # {user_id: {'service': ..., 'utr': ..., 'screenshot': ...}}
-active_chats = {}      # {user_id: True/False → admin chat mode}
-user_stage = {}        # {user_id: 'start'|'service'|'waiting_utr'|'done'}
+pending_messages = {}   # {user_id: {'service': ..., 'utr': ..., 'screenshot': ...}}
+active_chats = {}       # {user_id: True/False → admin chat mode}
+user_stage = {}         # {user_id: 'start'|'service'|'waiting_utr'|'done'}
 
 # -----------------------
 # START COMMAND
@@ -83,6 +83,16 @@ def callback(call):
         kb.add(InlineKeyboardButton("Black Titanium", callback_data=f"color|{service}|Black Titanium"))
         bot.edit_message_text(f"Select color for {service}:", call.message.chat.id, call.message.message_id, reply_markup=kb)
 
+    # ---- Samsung Galaxy S24 Ultra / S25 Ultra COLOR ----
+    elif data in ["buy_s24ultra", "buy_s25ultra"] and user_stage.get(user_id) == "service":
+        service = "Samsung Galaxy S24 Ultra" if data == "buy_s24ultra" else "Samsung Galaxy S25 Ultra"
+        user_stage[user_id] = "choose_color"
+        pending_messages[user_id] = {'service': service}
+        kb = InlineKeyboardMarkup()
+        kb.add(InlineKeyboardButton("Grey", callback_data=f"color|{service}|Grey"))
+        kb.add(InlineKeyboardButton("Black", callback_data=f"color|{service}|Black"))
+        bot.edit_message_text(f"Select color for {service}:", call.message.chat.id, call.message.message_id, reply_markup=kb)
+
     # ---- COLOR SELECTION ----
     elif data.startswith("color|"):
         parts = data.split("|")
@@ -90,22 +100,13 @@ def callback(call):
         color = parts[2]
         user_stage[user_id] = "waiting_utr"
         pending_messages[user_id] = {'service': f"{service} ({color})"}
-        bot.send_photo(call.message.chat.id, "https://files.catbox.moe/8rpxez.jpg",
-                       caption=f"Scan & Pay for {service} in {color}\nThen send your *12 digit* UTR number or screenshot here.")
+        bot.send_photo(
+            call.message.chat.id,
+            "https://files.catbox.moe/8rpxez.jpg",
+            caption=f"Scan & Pay for {service} in {color}\nThen send your *12 digit* UTR number or screenshot here."
+        )
 
-    # ---- OTHER DEVICES ----
-    elif data.startswith("buy_") and user_stage.get(user_id) == "service":
-        service_map = {
-            "buy_s24ultra": "Samsung Galaxy S24 Ultra",
-            "buy_s25ultra": "Samsung Galaxy S25 Ultra"
-        }
-        service = service_map.get(data, "Device")
-        user_stage[user_id] = "waiting_utr"
-        pending_messages[user_id] = {'service': service}
-        bot.send_photo(call.message.chat.id, "https://files.catbox.moe/8rpxez.jpg",
-                       caption=f"Scan & Pay for {service}\nThen send your *12 digit* UTR number or screenshot here.")
-
-    # ---- ADMIN ACTIONS (same as before) ----
+    # ---- ADMIN ACTIONS ----
     elif data.startswith(("confirm","cancel","chat","endchat")):
         parts = data.split("|")
         action = parts[0]
