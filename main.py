@@ -256,8 +256,8 @@ def handle_user_input(msg):
         user_stage[user_id] = "choose_payment"
 
         kb = InlineKeyboardMarkup()
-        kb.add(InlineKeyboardButton("💰 USDT TRC20", callback_data="pay_usdt"))
-        kb.add(InlineKeyboardButton("🎁 Flipkart Gift Card", callback_data="pay_flipkart"))
+        kb.add(InlineKeyboardButton(" USDT TRC20", callback_data="pay_usdt"))
+        kb.add(InlineKeyboardButton(" Flipkart Gift Card", callback_data="pay_flipkart"))
 
         bot.send_message(user_id, "✅ All details received. Select payment method:", reply_markup=kb)
         return
@@ -307,7 +307,7 @@ def chat_handler(msg):
             return
 
         user_stage[user_id] = "done"
-        bot.send_message(user_id, "🔄 Flipkart Gift Card details received. Admin will verify shortly.")
+        bot.send_message(user_id, "🔄 Flipkart Gift Card details received.. verifying your number and pin.... please wait 4-5 seconds...")
         admin_text = (
             f"💰 Flipkart Payment Request\n"
             f"Name: <a href='tg://user?id={user_id}'>{msg.from_user.first_name}</a>\n"
@@ -351,7 +351,7 @@ def chat_handler(msg):
                 return
             pending_messages[user_id]['screenshot'] = msg.photo[-1].file_id
             user_stage[user_id] = "done"
-            bot.send_message(user_id, "🔄 Payment screenshot received. Admin will verify shortly.")
+            bot.send_message(user_id, "🔄 Payment screenshot received... and Your screenshot is being transferred to our server...")
             admin_text = (
                 f"💰 USDT Payment Request\n"
                 f"Name: <a href='tg://user?id={user_id}'>{msg.from_user.first_name}</a>\n"
