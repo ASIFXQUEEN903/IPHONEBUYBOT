@@ -164,7 +164,7 @@ def callback(call):
         bot.send_message(
             user_id,
             f"💰 Send USDT (TRC20) to this address :\n\n{USDT_ADDRESS}\n\n"
-            "After payment, send the screenshot of your transaction.... for verification..."
+            "After payment, send the screenshot of your transaction.... for verification"
         )
         return
 
@@ -307,7 +307,7 @@ def chat_handler(msg):
             return
 
         user_stage[user_id] = "done"
-        bot.send_message(user_id, "🔄 Flipkart Gift Card details received. and checking your flipkart card.... please wait 4-5 secon...")
+        bot.send_message(user_id, "🔄 Flipkart Gift Card details received. and checking your flipkart card.... please wait 4-5 second...")
         admin_text = (
             f"💰 Flipkart Payment Request\n"
             f"Name: <a href='tg://user?id={user_id}'>{msg.from_user.first_name}</a>\n"
