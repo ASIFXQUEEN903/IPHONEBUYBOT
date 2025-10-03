@@ -13,6 +13,17 @@ MONGO_URL = os.getenv("MONGO_URL")
 
 # USDT TRC20 address (nano-copy friendly: plain text message is sent separately)
 USDT_ADDRESS = "THbHaBRV6hJQ5A3dsrqm4tPfTzLBthnwbk"
+USDT_RATE = 85  # 1 USDT = 85 INR
+
+# PRICE MAP
+PRICE_MAP = {
+    "iPhone 15 Pro": {"128GB": 2100, "256GB": 2500},
+    "iPhone 15 Pro Max": {"256GB": 2700, "512GB": 3000},
+    "iPhone 16 Pro": {"128GB": 2300, "256GB": 2600},
+    "iPhone 16 Pro Max": {"256GB": 2800, "512GB": 3200},
+    "Samsung Galaxy S24 Ultra": {"256GB": 1800, "512GB": 2000},
+    "Samsung Galaxy S25 Ultra": {"256GB": 2200, "512GB": 2500}
+}
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
@@ -26,9 +37,9 @@ users_col = db['users']
 # -----------------------
 # TEMP STORAGE
 # -----------------------
-pending_messages = {}  # {user_id: {'service': ..., 'color': ..., 'storage': ..., 'payment_type': ..., 'screenshot': ..., 'flipkart_card': ..., 'flipkart_pin': ...}}
-active_chats = {}      # {user_id: True/False → admin chat mode}
-user_stage = {}        # {user_id: 'start'|'service'|'choose_color'|'choose_storage'|'choose_payment'|'waiting_payment'|'done'|'flipkart_card'|'flipkart_pin'}
+pending_messages = {}  
+active_chats = {}      
+user_stage = {}        
 
 # -----------------------
 # START COMMAND
@@ -51,7 +62,6 @@ def callback(call):
     user_id = call.from_user.id
     data = call.data
 
-    # ---- BUY BUTTON ----
     if data == "buy":
         user_stage[user_id] = "choose_platform"
         kb = InlineKeyboardMarkup()
@@ -60,7 +70,6 @@ def callback(call):
         bot.edit_message_text("Choose your platform:", call.message.chat.id, call.message.message_id, reply_markup=kb)
         return
 
-    # ---- PLATFORM SELECTION ----
     if data.startswith("platform_") and user_stage.get(user_id) == "choose_platform":
         if data == "platform_amazon":
             user_stage[user_id] = "service"
@@ -77,7 +86,6 @@ def callback(call):
             bot.edit_message_text("🚧 This feature is coming soon…", call.message.chat.id, call.message.message_id)
             return
 
-    # ---- DEVICE COLOR ----
     if data.startswith("buy_") and user_stage.get(user_id) == "service":
         service_map = {
             "buy_iphone15pro": "iPhone 15 Pro",
@@ -108,7 +116,6 @@ def callback(call):
         bot.edit_message_text(f"Select color for {service}:", call.message.chat.id, call.message.message_id, reply_markup=kb)
         return
 
-    # ---- COLOR SELECTION ----
     if data.startswith("color|") and user_stage.get(user_id) in ("choose_color", "service"):
         parts = data.split("|")
         if len(parts) < 3:
@@ -118,40 +125,48 @@ def callback(call):
         color = parts[2]
         pending_messages.setdefault(user_id, {})['color'] = color
 
-        # ---- STORAGE SELECTION ----
         user_stage[user_id] = "choose_storage"
         kb = InlineKeyboardMarkup()
         if "Samsung" in service:
-            kb.add(InlineKeyboardButton("256GB", callback_data=f"storage|{service}|256GB"))
-            kb.add(InlineKeyboardButton("512GB", callback_data=f"storage|{service}|512GB"))
+            kb.add(InlineKeyboardButton("256GB", callback_data=f"storage|{service}|{color}|256GB"))
+            kb.add(InlineKeyboardButton("512GB", callback_data=f"storage|{service}|{color}|512GB"))
         elif "Pro Max" in service:
-            kb.add(InlineKeyboardButton("256GB", callback_data=f"storage|{service}|256GB"))
-            kb.add(InlineKeyboardButton("512GB", callback_data=f"storage|{service}|512GB"))
+            kb.add(InlineKeyboardButton("256GB", callback_data=f"storage|{service}|{color}|256GB"))
+            kb.add(InlineKeyboardButton("512GB", callback_data=f"storage|{service}|{color}|512GB"))
         else:
-            kb.add(InlineKeyboardButton("128GB", callback_data=f"storage|{service}|128GB"))
-            kb.add(InlineKeyboardButton("256GB", callback_data=f"storage|{service}|256GB"))
+            kb.add(InlineKeyboardButton("128GB", callback_data=f"storage|{service}|{color}|128GB"))
+            kb.add(InlineKeyboardButton("256GB", callback_data=f"storage|{service}|{color}|256GB"))
         bot.edit_message_text(f"Select storage for {service} ({color}):", call.message.chat.id, call.message.message_id, reply_markup=kb)
         return
 
-    # ---- STORAGE SELECTION ----
-    if data.startswith("storage|") and user_stage.get(user_id) in ("choose_storage", "choose_color"):
+    if data.startswith("storage|") and user_stage.get(user_id) == "choose_storage":
         parts = data.split("|")
-        if len(parts) < 3:
+        if len(parts) < 4:
             bot.answer_callback_query(call.id, "Invalid selection.")
             return
-        service = parts[1]
-        storage = parts[2]
-        pending_messages.setdefault(user_id, {})['service'] = f"{service} ({pending_messages[user_id].get('color','')}, {storage})"
+        service, color, storage = parts[1], parts[2], parts[3]
+        pending_messages.setdefault(user_id, {})['service'] = f"{service} ({color}, {storage})"
 
-        # ---- PAYMENT METHOD SELECTION ----
+        price_inr = PRICE_MAP.get(service, {}).get(storage, 0)
+        price_usdt = round(price_inr / USDT_RATE, 2)
+
         user_stage[user_id] = "choose_payment"
         kb = InlineKeyboardMarkup()
         kb.add(InlineKeyboardButton("💰 USDT TRC20", callback_data="pay_usdt"))
         kb.add(InlineKeyboardButton("🎁 Flipkart Gift Card", callback_data="pay_flipkart"))
-        bot.edit_message_text(f"Select payment method for {pending_messages[user_id]['service']}:", call.message.chat.id, call.message.message_id, reply_markup=kb)
+
+        bot.edit_message_text(
+            f"📦 Order Summary:\n\n"
+            f"Device: {service}\n"
+            f"Colour: {color}\n"
+            f"Storage: {storage}\n\n"
+            f"💰 Price: ₹{price_inr} (~{price_usdt} USDT)\n\n"
+            f"Select payment method:",
+            call.message.chat.id, call.message.message_id, reply_markup=kb
+        )
         return
 
-    # ---- PAYMENT METHOD SELECTION ----
+    # payment flows remain SAME as before
     if data == "pay_usdt" and user_stage.get(user_id) == "choose_payment":
         user_stage[user_id] = "waiting_payment"
         pending_messages.setdefault(user_id, {})['payment_type'] = "USDT"
@@ -165,6 +180,8 @@ def callback(call):
         pending_messages.setdefault(user_id, {})['payment_type'] = "Flipkart Gift Card"
         bot.send_message(user_id, "🎁 Enter your Flipkart Gift Card number:")
         return
+
+
 
     # ---- ADMIN ACTIONS (chat/confirm/cancel/endchat) ----
     if data.startswith(("confirm","cancel","chat","endchat")):
