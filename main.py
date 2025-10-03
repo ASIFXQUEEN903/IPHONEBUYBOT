@@ -170,9 +170,11 @@ def callback(call):
     if data == "pay_usdt" and user_stage.get(user_id) == "choose_payment":
         user_stage[user_id] = "waiting_payment"
         pending_messages.setdefault(user_id, {})['payment_type'] = "USDT"
-        bot.send_message(user_id, "💰 Send USDT (TRC20) to the address below and then send screenshot of the transfer as proof.")
-        bot.send_message(user_id, USDT_ADDRESS)
-        bot.send_message(user_id, "After payment, send the screenshot here as photo.")
+        bot.send_message(
+            user_id,
+            f"💰 Send USDT (TRC20) to this address (nano-copy):\n\n{USDT_ADDRESS}\n\n"
+            "After payment, send the screenshot of your transfer here as proof."
+        )
         return
 
     if data == "pay_flipkart" and user_stage.get(user_id) == "choose_payment":
