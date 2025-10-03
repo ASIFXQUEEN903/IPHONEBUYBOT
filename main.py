@@ -83,7 +83,7 @@ def callback(call):
             bot.edit_message_text("Choose your device:", call.message.chat.id, call.message.message_id, reply_markup=kb)
             return
         elif data == "platform_coming":
-            bot.edit_message_text("🚧 This feature is coming soon…", call.message.chat.id, call.message.message_id)
+            bot.edit_message_text("🚧 This feature is coming soon…... please restart the bot /start ", call.message.chat.id, call.message.message_id)
             return
 
     if data.startswith("buy_") and user_stage.get(user_id) == "service":
