@@ -239,35 +239,9 @@ def chat_handler(msg):
     user_stage[user_id] = "done"
 
 # -----------------------
-# BROADCAST + ADMIN COMMANDS
+# BROADCAST
 # -----------------------
-@bot.message_handler(commands=['complete'])
-def complete(msg):
-    if msg.from_user.id != ADMIN_ID:
-        return
-    ended = []
-    for uid, active in active_chats.items():
-        if active:
-            service = pending_messages.get(uid, {}).get('service', 'Service')
-            bot.send_message(uid, f"✅ Your {service} process is complete. Thank you for using our bot.")
-            ended.append(uid)
-    for uid in ended:
-        active_chats.pop(uid, None)
-    bot.send_message(ADMIN_ID, "💬 All active chats ended.")
 
-@bot.message_handler(commands=['refund'])
-def refund(msg):
-    if msg.from_user.id != ADMIN_ID:
-        return
-    ended = []
-    for uid, active in active_chats.items():
-        if active:
-            bot.send_message(uid, "❌ Technical issue. Your money will be refunded. Please wait 3–5 seconds…")
-            time.sleep(4)
-            ended.append(uid)
-    for uid in ended:
-        active_chats.pop(uid, None)
-    bot.send_message(ADMIN_ID, "💬 Refund processed for all active chats.")
 
 @bot.message_handler(commands=['broadcast'])
 def broadcast(msg):
